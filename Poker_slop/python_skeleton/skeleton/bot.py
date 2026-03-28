@@ -1,8 +1,9 @@
 '''
 This file contains the base class that you should implement for your pokerbot.
 '''
+import os
 import pkrbot
-from .actions import FoldAction, CheckAction
+from .actions import FoldAction, CheckAction, CallAction, RaiseAction
 import numpy as np
 STARTING_STACK = 250
 BIG_BLIND = 5
@@ -40,6 +41,13 @@ class Bot():
     The base class for a pokerbot.
     '''
     def __init__(self):
+        self._ranks = "23456789TJQKA"
+        self._rank_to_idx = {rank: idx for idx, rank in enumerate(self._ranks)}
+        # Fast fixed-size table: key = ((hi_rank * 13 + lo_rank) * 2 + suited_bit)
+        self._preflop_pct = [None] * (13 * 13 * 2)
+        self._default_preflop_pct = 50.0
+        self._load_preflop_lookup()
+
         self.opponent_behavior = {
             'aggression': 0.5,  # 0 (passive) to 1 (aggressive)
             'personality': 0,   # 0 Scared, 1 Cautious, 2 Balanced, 3 Aggressive
@@ -67,6 +75,15 @@ class Bot():
         
         self.deck = new_deck()
 
+        if(game_state.bankroll >= 250001):
+            self.always_fold = True
+        
+        self.hole_cards = round_state.hands[active]
+        self.used_redraw = 0
+        
+
+        
+
     def handle_round_over(self, game_state, terminal_state, active):
         '''
         Called when a round ends. Called NUM_ROUNDS times.
@@ -79,7 +96,15 @@ class Bot():
         Returns:
         Nothing.
         '''
-        raise NotImplementedError('handle_round_over')
+        # Update agression based on bet amount
+        from skeleton.states import STARTING_STACK
+        total_bet = STARTING_STACK - terminal_state.stacks[1-active]
+        self.opponent_behavior['aggression'] = ((total_bet / STARTING_STACK) + self.opponent_behavior['aggression']) / 2
+
+        # Update redraw tendency
+        self.opponent_behavior['redraw_tendency'] = (self.used_redraw + self.opponent_behavior['redraw_tendency']) / 2
+
+
 
     def get_action(self, game_state, round_state, active):
         '''
@@ -91,11 +116,12 @@ class Bot():
         round_state: the RoundState object.
         active: your player's index.
 
-        Returns:
+        Returns:    
         Your action (FoldAction, CallAction, CheckAction, RaiseAction, or RedrawAction).
         '''
-        BASERAISE = 2
-        AGGRESSIONMULTIPLIER = 1.5
+        #TODO: make the base rate have some randomness to it so we don't always do the same thing with the same hand strength
+        BASERAISE = 50
+        AGGRESSIONMULTIPLIER = 0.5 #how aggressive the opponent is, can be used to adjust bet sizing to maximize value against passive opponents and minimize losses against aggressive opponents
         #what are my available actions?
         legal_actions = self._get_legal_actions(round_state)
         
@@ -108,7 +134,7 @@ class Bot():
         if hand_strength > 0.8: #strong hand, bet/raise
             #add randomness to raise etc... so most the time we raise with strong hands but sometimes we check or call to mix it up
             if RaiseAction in legal_actions:
-                return RaiseAction(BASERAISE * AGGRESSIONMULTIPLIER)  # example bet size
+                return RaiseAction(self._select_bet_size)  # example bet size
             elif CheckAction in legal_actions:
                 return CheckAction()
             else:
@@ -143,8 +169,65 @@ class Bot():
 
         return actions
 
+    def _preflop_key_from_parts(self, rank_a, rank_b, suited):
+        idx_a = self._rank_to_idx[rank_a]
+        idx_b = self._rank_to_idx[rank_b]
+        hi = idx_a if idx_a >= idx_b else idx_b
+        lo = idx_b if idx_a >= idx_b else idx_a
+
+        suited_bit = 0 if hi == lo else (1 if suited else 0)
+        return ((hi * 13 + lo) * 2) + suited_bit
+
+    def _preflop_key_from_cards(self, card_a, card_b):
+        rank_a = card_a[0].upper()
+        rank_b = card_b[0].upper()
+        suited = card_a[1].lower() == card_b[1].lower()
+        return self._preflop_key_from_parts(rank_a, rank_b, suited)
+
+    def _load_preflop_lookup(self, table_path=None):
+        if table_path is None:
+            table_path = os.path.join(os.path.dirname(__file__), 'HANDS.json')
+
+        with open(table_path, 'r', encoding='utf-8') as table_file:
+            for raw_line in table_file:
+                line = raw_line.strip()
+                if not line:
+                    continue
+
+                tokens = line.split()
+                if len(tokens) < 3:
+                    continue
+
+                combo = tokens[1].upper()
+                pct = float(tokens[2].rstrip('%'))
+
+                if len(combo) == 2:
+                    # Pair, e.g. AA
+                    key_off = self._preflop_key_from_parts(combo[0], combo[1], False)
+                    key_suited = self._preflop_key_from_parts(combo[0], combo[1], True)
+                    self._preflop_pct[key_off] = pct
+                    self._preflop_pct[key_suited] = pct
+                elif len(combo) == 3:
+                    # Non-pair, e.g. AKs / AKo
+                    suited = combo[2] == 'S'
+                    key = self._preflop_key_from_parts(combo[0], combo[1], suited)
+                    self._preflop_pct[key] = pct
+
+    def get_preflop_percent(self, hole_cards):
+        '''
+        Returns preflop equity percent for two hole cards, e.g. 64.65 for AKo.
+        '''
+        if not hole_cards or len(hole_cards) < 2:
+            return self._default_preflop_pct
+
+        key = self._preflop_key_from_cards(hole_cards[0], hole_cards[1])
+        value = self._preflop_pct[key]
+        return self._default_preflop_pct if value is None else value
+
     def _evaluate_hand(self, hole_cards, board_cards):
-        pass
+        _ = board_cards
+        # Normalized 0..1 strength for fast preflop decisions.
+        return self.get_preflop_percent(hole_cards) / 100.0
     def _estimate_equity(self, hole_cards, board_cards, num_simulations):
         """
         Monte Carlo equity estimate against a uniform random opponent.
@@ -268,4 +351,75 @@ class Bot():
     def _pot_odds_and_commitment(self, roundstate, active):
         pass
     def _select_bet_size(self, equity, pot, stack, street):
-        pass
+        '''
+        Returns a chip amount sized from:
+        - equity (0..1)
+        - pot size
+        - remaining stack
+        - street (0, 3, 4, 5)
+        - opponent aggression in self.opponent_behavior['aggression'] (0..1)
+
+        The model sizes up for value against passive opponents and sizes down
+        against aggressive opponents to control downside variance.
+        '''
+        if stack <= 0:
+            return 0
+
+        # Clamp inputs into safe ranges.
+        equity = max(0.0, min(1.0, float(equity)))
+        pot = max(0.0, float(pot))
+        stack = max(0.0, float(stack))
+        aggression = float(self.opponent_behavior.get('aggression', 0.5))
+        aggression = max(0.0, min(1.0, aggression))
+
+        # Later streets allow larger sizing because ranges are more defined.
+        street_factor = {
+            0: 0.85,  # preflop
+            3: 1.00,  # flop
+            4: 1.15,  # turn
+            5: 1.30,  # river
+        }.get(street, 1.00)
+
+        # Value signal is stronger as equity moves above 0.5.
+        value_signal = max(0.0, (equity - 0.5) / 0.5)
+
+        # Base pot fraction from equity.
+        pot_fraction = 0.25 + (0.65 * value_signal)
+
+        # Versus passive players, size up for value.
+        passive_bonus = (1.0 - aggression) * (0.20 + 0.25 * value_signal)
+
+        # Versus aggressive players, reduce size to control losses.
+        aggressive_discount = aggression * (0.15 + 0.25 * (1.0 - value_signal))
+
+        pot_fraction += passive_bonus
+        pot_fraction -= aggressive_discount
+
+        # Controlled semi-bluff region.
+        if 0.38 <= equity <= 0.55:
+            pot_fraction += (1.0 - aggression) * 0.12
+            pot_fraction -= aggression * 0.08
+
+        # Weak hands should mostly keep pot smaller.
+        if equity < 0.40:
+            pot_fraction = min(pot_fraction, 0.15 + (0.35 * (1.0 - aggression)))
+
+        # Keep practical bounds before street scaling.
+        pot_fraction = max(0.10, min(1.25, pot_fraction))
+        pot_fraction *= street_factor
+
+        # If pot is tiny (or unknown), anchor to blind-based sizing.
+        if pot <= 0:
+            desired = BIG_BLIND * (2 if equity > 0.70 else 1)
+        else:
+            desired = int(round(pot * pot_fraction))
+
+        # Strong value spot against passive opponents: allow larger sizing.
+        if equity >= 0.82 and aggression <= 0.40 and pot > 0:
+            desired = max(desired, int(round(pot * 1.10)))
+
+        # Final stack and floor constraints.
+        desired = max(BIG_BLIND, desired)
+        desired = min(desired, int(stack))
+
+        return int(desired)

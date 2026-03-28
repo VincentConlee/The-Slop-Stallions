@@ -8,9 +8,9 @@ GameState = namedtuple('GameState', ['bankroll', 'game_clock', 'round_num'])
 TerminalState = namedtuple('TerminalState', ['deltas', 'previous_state'])
 
 NUM_ROUNDS = 1000
-STARTING_STACK = 400
-BIG_BLIND = 2
-SMALL_BLIND = 1
+STARTING_STACK = 250
+BIG_BLIND = 5
+SMALL_BLIND = 2
 
 
 class RoundState(
@@ -199,8 +199,12 @@ class RoundState(
                 # Engine does not transmit the new redraw card directly in action history.
                 # Use a placeholder to preserve shape/indices in local bot state.
                 if target_type == 'hole':
+                    while len(hands[active]) <= target_index:
+                        hands[active].append('??')
                     hands[active][target_index] = '??'
                 else:
+                    while len(board) <= target_index:
+                        board.append('??')
                     board[target_index] = '??'
                 redraws_used[active] = True
                 state_after_redraw = RoundState(
