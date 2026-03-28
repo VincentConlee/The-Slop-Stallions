@@ -99,7 +99,7 @@ class Bot():
         if hand_strength > 0.8: #strong hand, bet/raise
             #add randomness to raise etc... so most the time we raise with strong hands but sometimes we check or call to mix it up
             if RaiseAction in legal_actions:
-                return RaiseAction(BASERAISE * AGGRESSIONMULTIPLIER)  # example bet size
+                return RaiseAction(int(BASERAISE * AGGRESSIONMULTIPLIER))  # example bet size
             elif CheckAction in legal_actions:
                 return CheckAction()
             else:
@@ -194,7 +194,10 @@ class Bot():
         # Normalized 0..1 strength for fast preflop decisions.
         return self.get_preflop_percent(hole_cards) / 100.0
     def _estimate_equity(self, hole_cards, board_cards, num_simulations):
-        if (board_cards.length() == 0)
+        _ = hole_cards
+        _ = board_cards
+        _ = num_simulations
+        return 0.5
     def _evaluate_redraw_options(self, hole_cards, board_cards, stub):
         pass  
     def _board_texture(self, board_cards):
