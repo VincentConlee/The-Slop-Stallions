@@ -1,14 +1,22 @@
 '''
 This file contains the base class that you should implement for your pokerbot.
 '''
+import os
 import pkrbot
-from .actions import FoldAction, CheckAction
+from .actions import FoldAction, CheckAction, CallAction, RaiseAction
 
 class Bot():
     '''
     The base class for a pokerbot.
     '''
     def __init__(self):
+        self._ranks = "23456789TJQKA"
+        self._rank_to_idx = {rank: idx for idx, rank in enumerate(self._ranks)}
+        # Fast fixed-size table: key = ((hi_rank * 13 + lo_rank) * 2 + suited_bit)
+        self._preflop_pct = [None] * (13 * 13 * 2)
+        self._default_preflop_pct = 50.0
+        self._load_preflop_lookup()
+
         self.opponent_behavior = {
             'aggression': 0.5,  # 0 (passive) to 1 (aggressive)
             'personality': 0,   # 0 Scared, 1 Cautious, 2 Balanced, 3 Aggressive
@@ -60,9 +68,10 @@ class Bot():
         round_state: the RoundState object.
         active: your player's index.
 
-        Returns:
+        Returns:    
         Your action (FoldAction, CallAction, CheckAction, RaiseAction, or RedrawAction).
         '''
+        #TODO: make the base rate have some randomness to it so we don't always do the same thing with the same hand strength
         BASERAISE = 2
         AGGRESSIONMULTIPLIER = 1.5
         #what are my available actions?
@@ -112,8 +121,65 @@ class Bot():
 
         return actions
 
+    def _preflop_key_from_parts(self, rank_a, rank_b, suited):
+        idx_a = self._rank_to_idx[rank_a]
+        idx_b = self._rank_to_idx[rank_b]
+        hi = idx_a if idx_a >= idx_b else idx_b
+        lo = idx_b if idx_a >= idx_b else idx_a
+
+        suited_bit = 0 if hi == lo else (1 if suited else 0)
+        return ((hi * 13 + lo) * 2) + suited_bit
+
+    def _preflop_key_from_cards(self, card_a, card_b):
+        rank_a = card_a[0].upper()
+        rank_b = card_b[0].upper()
+        suited = card_a[1].lower() == card_b[1].lower()
+        return self._preflop_key_from_parts(rank_a, rank_b, suited)
+
+    def _load_preflop_lookup(self, table_path=None):
+        if table_path is None:
+            table_path = os.path.join(os.path.dirname(__file__), 'HANDS.json')
+
+        with open(table_path, 'r', encoding='utf-8') as table_file:
+            for raw_line in table_file:
+                line = raw_line.strip()
+                if not line:
+                    continue
+
+                tokens = line.split()
+                if len(tokens) < 3:
+                    continue
+
+                combo = tokens[1].upper()
+                pct = float(tokens[2].rstrip('%'))
+
+                if len(combo) == 2:
+                    # Pair, e.g. AA
+                    key_off = self._preflop_key_from_parts(combo[0], combo[1], False)
+                    key_suited = self._preflop_key_from_parts(combo[0], combo[1], True)
+                    self._preflop_pct[key_off] = pct
+                    self._preflop_pct[key_suited] = pct
+                elif len(combo) == 3:
+                    # Non-pair, e.g. AKs / AKo
+                    suited = combo[2] == 'S'
+                    key = self._preflop_key_from_parts(combo[0], combo[1], suited)
+                    self._preflop_pct[key] = pct
+
+    def get_preflop_percent(self, hole_cards):
+        '''
+        Returns preflop equity percent for two hole cards, e.g. 64.65 for AKo.
+        '''
+        if not hole_cards or len(hole_cards) < 2:
+            return self._default_preflop_pct
+
+        key = self._preflop_key_from_cards(hole_cards[0], hole_cards[1])
+        value = self._preflop_pct[key]
+        return self._default_preflop_pct if value is None else value
+
     def _evaluate_hand(self, hole_cards, board_cards):
-        pass
+        _ = board_cards
+        # Normalized 0..1 strength for fast preflop decisions.
+        return self.get_preflop_percent(hole_cards) / 100.0
     def _estimate_equity(self, hole_cards, board_cards, num_simulations):
         pass
     def _evaluate_redraw_options(self, hole_cards, board_cards, stub):
