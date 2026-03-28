@@ -1,15 +1,25 @@
 '''
 This file contains the base class that you should implement for your pokerbot.
 '''
-
+import pkrbot
 
 class Bot():
     '''
     The base class for a pokerbot.
     '''
     def __init__(self):
-        # where precomputation happens
-        pass
+        RANKS = "23456789TJQKA"
+        SUITS = "cdhs"  
+
+        def new_deck():
+            return [r + s for r in RANKS for s in SUITS]
+        
+        deck = new_deck()
+
+        self.opponent_behavior = 0
+
+
+
 
     def handle_new_round(self, game_state, round_state, active):
         '''
