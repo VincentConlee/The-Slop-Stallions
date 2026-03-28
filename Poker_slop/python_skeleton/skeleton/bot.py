@@ -77,6 +77,7 @@ class Bot():
             return [r + s for r in RANKS for s in SUITS]
         
         self.deck = new_deck()
+        self.street = round_state.street
 
         if(game_state.bankroll >= 250001):
             self.always_fold = True
@@ -245,10 +246,13 @@ class Bot():
         return self._default_preflop_pct if value is None else value
 
     def _evaluate_hand(self, hole_cards, board_cards):
-        _ = board_cards
         # Normalized 0..1 strength for fast preflop decisions.
-        return self.get_preflop_percent(hole_cards) / 100.0
-    
+        if self.street == 0:
+            return self.get_preflop_percent(hole_cards) / 100.0
+        
+        return self._estimate_equity(hole_cards, board_cards, num_simulations=1000)
+        
+
     def _estimate_equity(self, hole_cards, board_cards, num_simulations):
         """
         Monte Carlo equity estimate against a uniform random opponent.
@@ -264,7 +268,7 @@ class Bot():
         Returns:
             float, equity in [0.0, 1.0]
         """
-        stub= get_stub(hero_cards, board_cards)
+        stub= get_stub(hole_cards, board_cards)
         board_to_deal = 5 - len(board_cards)
         wins = 0.0
 
