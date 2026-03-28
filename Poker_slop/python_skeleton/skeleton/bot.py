@@ -8,13 +8,6 @@ class Bot():
     The base class for a pokerbot.
     '''
     def __init__(self):
-        RANKS = "23456789TJQKA"
-        SUITS = "cdhs"  
-
-        def new_deck():
-            return [r + s for r in RANKS for s in SUITS]
-        
-        deck = new_deck()
 
         self.opponent_behavior = {
             'aggression': 0.5,  # 0 (passive) to 1 (aggressive)
@@ -35,7 +28,13 @@ class Bot():
         Returns:
         Nothing.
         '''
-        raise NotImplementedError('handle_new_round')
+        RANKS = "23456789TJQKA"
+        SUITS = "cdhs"  
+
+        def new_deck():
+            return [r + s for r in RANKS for s in SUITS]
+        
+        deck = new_deck()
 
     def handle_round_over(self, game_state, terminal_state, active):
         '''
