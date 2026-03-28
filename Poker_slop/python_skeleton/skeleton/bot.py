@@ -94,8 +94,8 @@ class Bot():
         Your action (FoldAction, CallAction, CheckAction, RaiseAction, or RedrawAction).
         '''
         #TODO: make the base rate have some randomness to it so we don't always do the same thing with the same hand strength
-        BASERAISE = 2
-        AGGRESSIONMULTIPLIER = 1.5
+        BASERAISE = 50
+        AGGRESSIONMULTIPLIER = 0.5 #how aggressive the opponent is, can be used to adjust bet sizing to maximize value against passive opponents and minimize losses against aggressive opponents
         #what are my available actions?
         legal_actions = self._get_legal_actions(round_state)
         
@@ -108,7 +108,7 @@ class Bot():
         if hand_strength > 0.8: #strong hand, bet/raise
             #add randomness to raise etc... so most the time we raise with strong hands but sometimes we check or call to mix it up
             if RaiseAction in legal_actions:
-                return RaiseAction(int(BASERAISE * AGGRESSIONMULTIPLIER))  # example bet size
+                return RaiseAction(self._select_bet_size)  # example bet size
             elif CheckAction in legal_actions:
                 return CheckAction()
             else:
@@ -216,4 +216,75 @@ class Bot():
     def _pot_odds_and_commitment(self, roundstate, active):
         pass
     def _select_bet_size(self, equity, pot, stack, street):
-        pass
+        '''
+        Returns a chip amount sized from:
+        - equity (0..1)
+        - pot size
+        - remaining stack
+        - street (0, 3, 4, 5)
+        - opponent aggression in self.opponent_behavior['aggression'] (0..1)
+
+        The model sizes up for value against passive opponents and sizes down
+        against aggressive opponents to control downside variance.
+        '''
+        if stack <= 0:
+            return 0
+
+        # Clamp inputs into safe ranges.
+        equity = max(0.0, min(1.0, float(equity)))
+        pot = max(0.0, float(pot))
+        stack = max(0.0, float(stack))
+        aggression = float(self.opponent_behavior.get('aggression', 0.5))
+        aggression = max(0.0, min(1.0, aggression))
+
+        # Later streets allow larger sizing because ranges are more defined.
+        street_factor = {
+            0: 0.85,  # preflop
+            3: 1.00,  # flop
+            4: 1.15,  # turn
+            5: 1.30,  # river
+        }.get(street, 1.00)
+
+        # Value signal is stronger as equity moves above 0.5.
+        value_signal = max(0.0, (equity - 0.5) / 0.5)
+
+        # Base pot fraction from equity.
+        pot_fraction = 0.25 + (0.65 * value_signal)
+
+        # Versus passive players, size up for value.
+        passive_bonus = (1.0 - aggression) * (0.20 + 0.25 * value_signal)
+
+        # Versus aggressive players, reduce size to control losses.
+        aggressive_discount = aggression * (0.15 + 0.25 * (1.0 - value_signal))
+
+        pot_fraction += passive_bonus
+        pot_fraction -= aggressive_discount
+
+        # Controlled semi-bluff region.
+        if 0.38 <= equity <= 0.55:
+            pot_fraction += (1.0 - aggression) * 0.12
+            pot_fraction -= aggression * 0.08
+
+        # Weak hands should mostly keep pot smaller.
+        if equity < 0.40:
+            pot_fraction = min(pot_fraction, 0.15 + (0.35 * (1.0 - aggression)))
+
+        # Keep practical bounds before street scaling.
+        pot_fraction = max(0.10, min(1.25, pot_fraction))
+        pot_fraction *= street_factor
+
+        # If pot is tiny (or unknown), anchor to blind-based sizing.
+        if pot <= 0:
+            desired = BIG_BLIND * (2 if equity > 0.70 else 1)
+        else:
+            desired = int(round(pot * pot_fraction))
+
+        # Strong value spot against passive opponents: allow larger sizing.
+        if equity >= 0.82 and aggression <= 0.40 and pot > 0:
+            desired = max(desired, int(round(pot * 1.10)))
+
+        # Final stack and floor constraints.
+        desired = max(BIG_BLIND, desired)
+        desired = min(desired, int(stack))
+
+        return int(desired)
