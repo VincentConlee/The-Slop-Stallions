@@ -22,7 +22,6 @@ class Bot():
     The base class for a pokerbot.
     '''
     def __init__(self):
-
         self.opponent_behavior = {
             'aggression': 0.5,  # 0 (passive) to 1 (aggressive)
             'personality': 0,   # 0 Scared, 1 Cautious, 2 Balanced, 3 Aggressive
@@ -48,7 +47,7 @@ class Bot():
         def new_deck():
             return [r + s for r in RANKS for s in SUITS]
         
-        deck = new_deck()
+        self.deck = new_deck()
 
     def handle_round_over(self, game_state, terminal_state, active):
         '''
