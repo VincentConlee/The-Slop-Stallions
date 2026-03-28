@@ -78,7 +78,15 @@ class Bot():
         Returns:
         Nothing.
         '''
-        raise NotImplementedError('handle_round_over')
+        # Update agression based on bet amount
+        from skeleton.states import STARTING_STACK
+        total_bet = STARTING_STACK - terminal_state.stacks[1-active]
+        self.opponent_behavior['aggression'] = ((total_bet / STARTING_STACK) + self.opponent_behavior['aggression']) / 2
+
+        # Update redraw tendency
+        self.opponent_behavior['redraw_tendency'] = (self.used_redraw + self.opponent_behavior['redraw_tendency']) / 2
+
+
 
     def get_action(self, game_state, round_state, active):
         '''
