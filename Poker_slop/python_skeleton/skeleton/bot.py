@@ -7,8 +7,9 @@ class Bot():
     '''
     The base class for a pokerbot.
     '''
-    def __init__():
-
+    def __init__(self):
+        # where precomputation happens
+        pass
 
     def handle_new_round(self, game_state, round_state, active):
         '''
@@ -53,17 +54,17 @@ class Bot():
         '''
         raise NotImplementedError('get_action')
 
-    def _evaluate_hand(hole_cards, board_cards):
+    def _evaluate_hand(self, hole_cards, board_cards):
         pass
-    def _estimate_equity(hole_cards, board_cards, num_simulations):
+    def _estimate_equity(self, hole_cards, board_cards, num_simulations):
         pass
-    def _evaluate_redraw_options(hole_cards, board_cards, stub):
+    def _evaluate_redraw_options(self, hole_cards, board_cards, stub):
         pass  
-    def _board_texture(board_cards):
+    def _board_texture(self, board_cards):
         pass
-    def _opponent_range_estimate(street, action_history):
+    def _opponent_range_estimate(self, street, action_history):
         pass
-    def _pot_odds_and_commitment(roundstate, active):
+    def _pot_odds_and_commitment(self, roundstate, active):
         pass
-    def _select_bet_size(equity, pot, stack, street):
+    def _select_bet_size(self, equity, pot, stack, street):
         pass
