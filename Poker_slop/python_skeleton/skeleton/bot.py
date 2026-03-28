@@ -5,6 +5,8 @@ import os
 import pkrbot
 from .actions import FoldAction, CheckAction, CallAction, RaiseAction
 import numpy as np
+from numba import njit
+
 STARTING_STACK = 250
 BIG_BLIND = 5
 SMALL_BLIND = 2
