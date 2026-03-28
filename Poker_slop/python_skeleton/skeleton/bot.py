@@ -57,6 +57,15 @@ class Bot():
         
         self.deck = new_deck()
 
+        if(game_state.bankroll >= 250001):
+            self.always_fold = True
+        
+        self.hole_cards = round_state.hands[active]
+        self.used_redraw = 0
+        
+
+        
+
     def handle_round_over(self, game_state, terminal_state, active):
         '''
         Called when a round ends. Called NUM_ROUNDS times.
