@@ -121,7 +121,7 @@ class Bot():
         '''
         #TODO: make the base rate have some randomness to it so we don't always do the same thing with the same hand strength
         BASERAISE = 50
-        AGGRESSIONMULTIPLIER = 0.5 #how aggressive the opponent is, can be used to adjust bet sizing to maximize value against passive opponents and minimize losses against aggressive opponents
+        AGGRESSIONMULTIPLIER = self.opponent_behavior['aggression']  #how aggressive the opponent is, can be used to adjust bet sizing to maximize value against passive opponents and minimize losses against aggressive opponents
         #what are my available actions?
         legal_actions = self._get_legal_actions(round_state)
         
