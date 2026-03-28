@@ -35,7 +35,8 @@ class Bot():
             'personality': 0,   # 0 Scared, 1 Cautious, 2 Balanced, 3 Aggressive
             'hand_strength': 0.5,  # 0 (weak) to 1 (strong)
             'redraw_tendency': 0.5,  # 0 (never redraw) to 1 (always redraw)
-        } 
+        }
+        self.used_redraw = 0
 
     def handle_new_round(self, game_state, round_state, active):
         '''
@@ -78,10 +79,18 @@ class Bot():
         Returns:
         Nothing.
         '''
-        # Update agression based on bet amount
-        from skeleton.states import STARTING_STACK
-        total_bet = STARTING_STACK - terminal_state.stacks[1-active]
-        self.opponent_behavior['aggression'] = ((total_bet / STARTING_STACK) + self.opponent_behavior['aggression']) / 2
+        _ = game_state
+        # Update aggression using whichever stack source is available.
+        stacks = getattr(terminal_state, 'stacks', None)
+        if stacks is None and hasattr(terminal_state, 'previous_state') and terminal_state.previous_state is not None:
+            stacks = getattr(terminal_state.previous_state, 'stacks', None)
+
+        if stacks is not None and len(stacks) > (1 - active):
+            total_bet = STARTING_STACK - stacks[1 - active]
+            total_bet = max(0.0, min(float(STARTING_STACK), float(total_bet)))
+            self.opponent_behavior['aggression'] = (
+                (total_bet / STARTING_STACK) + self.opponent_behavior['aggression']
+            ) / 2
 
         # Update redraw tendency
         self.opponent_behavior['redraw_tendency'] = (self.used_redraw + self.opponent_behavior['redraw_tendency']) / 2
@@ -102,8 +111,6 @@ class Bot():
         Your action (FoldAction, CallAction, CheckAction, RaiseAction, or RedrawAction).
         '''
         #TODO: make the base rate have some randomness to it so we don't always do the same thing with the same hand strength
-        BASERAISE = 50
-        AGGRESSIONMULTIPLIER = 0.5 #how aggressive the opponent is, can be used to adjust bet sizing to maximize value against passive opponents and minimize losses against aggressive opponents
         #what are my available actions?
         legal_actions = self._get_legal_actions(round_state)
         
@@ -116,7 +123,16 @@ class Bot():
         if hand_strength > 0.8: #strong hand, bet/raise
             #add randomness to raise etc... so most the time we raise with strong hands but sometimes we check or call to mix it up
             if RaiseAction in legal_actions:
-                return RaiseAction(self._select_bet_size)  # example bet size
+                pips = getattr(round_state, 'pips', [0, 0])
+                stacks = getattr(round_state, 'stacks', [STARTING_STACK, STARTING_STACK])
+                street = getattr(round_state, 'street', 0)
+                pot = sum(pips)
+                stack = stacks[active] if len(stacks) > active else STARTING_STACK
+                raise_amount = self._select_bet_size(hand_strength, pot, stack, street)
+                if hasattr(round_state, 'raise_bounds'):
+                    min_raise, max_raise = round_state.raise_bounds()
+                    raise_amount = max(min_raise, min(max_raise, int(raise_amount)))
+                return RaiseAction(raise_amount)
             elif CheckAction in legal_actions:
                 return CheckAction()
             else:
