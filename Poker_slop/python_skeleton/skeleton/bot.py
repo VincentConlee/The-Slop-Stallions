@@ -5,6 +5,19 @@ import os
 import pkrbot
 from .actions import FoldAction, CheckAction, CallAction, RaiseAction
 
+STARTING_STACK = 400
+BIG_BLIND = 5
+SMALL_BLIND = 2
+EFFECTIVE_BB = STARTING_STACK / BIG_BLIND
+
+NUM_ROUNDS = 1000
+TOTAL_TIME_BUDGET = 180.0
+TIME_SAFETY_MARGIN = 5.0
+FAST_MODE_THRESHOLD = 0.70
+
+REDRAW_HOLE_MARGIN = 0.08
+REDRAW_BOARD_MARGIN = 0.04
+
 class Bot():
     '''
     The base class for a pokerbot.
@@ -181,7 +194,7 @@ class Bot():
         # Normalized 0..1 strength for fast preflop decisions.
         return self.get_preflop_percent(hole_cards) / 100.0
     def _estimate_equity(self, hole_cards, board_cards, num_simulations):
-        pass
+        if (board_cards.length() == 0)
     def _evaluate_redraw_options(self, hole_cards, board_cards, stub):
         pass  
     def _board_texture(self, board_cards):
