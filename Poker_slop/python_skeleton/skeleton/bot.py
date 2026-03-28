@@ -16,10 +16,12 @@ class Bot():
         
         deck = new_deck()
 
-        self.opponent_behavior = 0
-
-
-
+        self.opponent_behavior = {
+            'aggression': 0.5,  # 0 (passive) to 1 (aggressive)
+            'personality': 0,   # 0 Scared, 1 Cautious, 2 Balanced, 3 Aggressive
+            'hand_strength': 0.5,  # 0 (weak) to 1 (strong)
+            'redraw_tendency': 0.5,  # 0 (never redraw) to 1 (always redraw)
+        } 
 
     def handle_new_round(self, game_state, round_state, active):
         '''
