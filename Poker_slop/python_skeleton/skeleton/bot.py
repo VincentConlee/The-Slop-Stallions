@@ -26,7 +26,7 @@ def analyze_board(board_cards):
     ranks = [rank_of(c) for c in board_cards]
     suits = [suit_of(c) for c in board_cards]
 
-    suit_coutns = {}
+    suit_counts = {}
     for s in suits:
         suit_counts[s] = suit_counts.get(s, 0) + 1
 
@@ -228,6 +228,7 @@ class Bot():
         _ = board_cards
         # Normalized 0..1 strength for fast preflop decisions.
         return self.get_preflop_percent(hole_cards) / 100.0
+    
     def _estimate_equity(self, hole_cards, board_cards, num_simulations):
         """
         Monte Carlo equity estimate against a uniform random opponent.
